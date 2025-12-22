@@ -3084,10 +3084,11 @@ void GCode::_do_export(Print& print, GCodeOutputStream &file, ThumbnailsGenerato
                         m_sorted_layer_filaments.emplace_back(lt.extruders);
                 }
 
-                // Orca: finish tracking power lost recovery
+                // Orca: disable power loss recovery if it was enabled earlier
                 {
-                    if (m_second_layer_things_done && print.config().enable_power_loss_recovery.value == true) {
-                        file.write(m_writer.enable_power_loss_recovery(false));
+                    const auto plr_mode = print.config().enable_power_loss_recovery.value;
+                    if (m_second_layer_things_done && plr_mode == PowerLossRecoveryMode::Enable) {
+                        file.write(m_writer.enable_power_loss_recovery(PowerLossRecoveryMode::Disable));
                     }
                 }
                 ++ finished_objects;
@@ -3165,9 +3166,9 @@ void GCode::_do_export(Print& print, GCodeOutputStream &file, ThumbnailsGenerato
                     m_sorted_layer_filaments.emplace_back(lt.extruders);
             }
 
-            // Orca: finish tracking power lost recovery
-            if (m_second_layer_things_done && print.config().enable_power_loss_recovery.value == true) {
-                file.write(m_writer.enable_power_loss_recovery(false));
+            // Orca: disable power loss recovery
+            if (m_second_layer_things_done && print.config().enable_power_loss_recovery.value == PowerLossRecoveryMode::Enable) {
+                file.write(m_writer.enable_power_loss_recovery(PowerLossRecoveryMode::Disable));
             }
             if (m_wipe_tower)
                 // Purge the extruder, pull out the active filament.
@@ -4381,10 +4382,9 @@ LayerResult GCode::process_layer(
     }
 
     if (!first_layer && !m_second_layer_things_done) {
-        // Orca: start tracking power lost recovery
-        if (print.config().enable_power_loss_recovery.value == true) {
-            gcode += m_writer.enable_power_loss_recovery(true);
-        }
+        // Orca: set power loss recovery
+        const auto plr_mode = print.config().enable_power_loss_recovery.value;
+        gcode += m_writer.enable_power_loss_recovery(plr_mode);
 
         if (print.is_BBL_printer()) {
             // BBS: open first layer inspection at second layer
@@ -6186,10 +6186,16 @@ std::string GCode::_extrude(const ExtrusionPath &path, std::string description, 
             );
         }
 
-        // if still in avoidance mode and under “max”, clamp to “min”
-        if (m_resonance_avoidance
-            && speed <= m_config.max_resonance_avoidance_speed.value) {
-            speed = std::min(speed, m_config.min_resonance_avoidance_speed.value);
+            // if still in avoidance mode and under "max", adjust speed:
+            // - speeds in lower half of range: clamp down to "min"
+            // - speeds in upper half of range: boost up to "max"
+        if (m_resonance_avoidance && speed < m_config.max_resonance_avoidance_speed.value) {
+            if (speed < m_config.min_resonance_avoidance_speed.value +
+                            ((m_config.max_resonance_avoidance_speed.value - m_config.min_resonance_avoidance_speed.value) / 2)) {
+                speed = std::min(speed, m_config.min_resonance_avoidance_speed.value);
+            } else {
+                speed = m_config.max_resonance_avoidance_speed.value;
+            }
         }
 
         // reset flag for next segment
