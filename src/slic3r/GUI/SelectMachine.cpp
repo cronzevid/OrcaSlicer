@@ -68,25 +68,6 @@ std::string get_nozzle_volume_type_cloud_string(NozzleVolumeType nozzle_volume_t
     }
 }
 
-static std::string get_nozzle_type_cloud_string(NozzleType nozzle_type)
-{
-    if (nozzle_type == NozzleType::ntHardenedSteel) {
-        return "hardened_steel";
-    }
-    else if (nozzle_type == NozzleType::ntStainlessSteel) {
-        return "stainless_steel";
-    }
-    else if (nozzle_type == NozzleType::ntTungstenCarbide) {
-        return "tungsten_carbide";
-    }
-    else if (nozzle_type == NozzleType::ntBrass) {
-        return "brass";
-    }
-    else {
-        return "unknown";
-    }
-}
-
 std::vector<wxString> SelectMachineDialog::MACHINE_BED_TYPE_STRING;
 std::vector<string> SelectMachineDialog::MachineBedTypeString;
 void                SelectMachineDialog::init_machine_bed_types()
@@ -1299,11 +1280,6 @@ bool SelectMachineDialog::build_nozzles_info(std::string& nozzles_info)
         BOOST_LOG_TRIVIAL(error) << "build_nozzles_info, opt_nozzle_volume_type is nullptr";
         return false;
     }
-    auto opt_nozzle_type = preset_bundle->printers.get_edited_preset().config.option<ConfigOptionEnumsGeneric>("nozzle_type");
-    if (opt_nozzle_type == nullptr) {
-        BOOST_LOG_TRIVIAL(error) << "build_nozzles_info, opt_nozzle_type is nullptr";
-        return false;
-    }
     json nozzle_item;
     /* only o1d two nozzles has build_nozzles info now */
     if (opt_nozzle_diameters->size() != 2) {
@@ -1322,10 +1298,7 @@ bool SelectMachineDialog::build_nozzles_info(std::string& nozzles_info)
             assert(false);
             continue;
         }
-        if (i < opt_nozzle_type->values.size())
-            nozzle_item["type"] = get_nozzle_type_cloud_string((NozzleType)opt_nozzle_type->values[i]);
-        else
-            nozzle_item["type"] = "unknown";
+        nozzle_item["type"] = nullptr;
         if (i >= 0 && i < opt_nozzle_volume_type->size()) {
             nozzle_item["flowSize"] = get_nozzle_volume_type_cloud_string((NozzleVolumeType)opt_nozzle_volume_type->get_at(i));
         }
